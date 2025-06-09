@@ -4,6 +4,7 @@ import google.generativeai as genai
 import pandas as pd
 import os
 from dotenv import load_dotenv
+from generate_medical_data import generate_medical_records
 
 # Load environment variables
 load_dotenv()
@@ -14,6 +15,13 @@ CORS(app)
 # Configure Google Gemini
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
 model = genai.GenerativeModel('gemini-2.0-flash')
+
+# Generate medical records if they don't exist
+if not os.path.exists('medical_records.csv'):
+    print("Generating medical records...")
+    df = generate_medical_records()
+    df.to_csv('medical_records.csv', index=False)
+    print("Medical records generated successfully!")
 
 # Load medical records
 medical_records = pd.read_csv('medical_records.csv')
