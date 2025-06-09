@@ -24,7 +24,7 @@ medications = [
     "Metoprolol", "Warfarin", "Insulin", "Prednisone"
 ]
 
-def generate_medical_records(num_records=500000):
+def generate_medical_records(num_records=50000):
     records = []
     
     for _ in range(num_records):
