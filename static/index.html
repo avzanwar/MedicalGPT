@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedicalGPT - AI Medical Assistant</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        .loading {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 1000;
+        }
+        .loading-spinner {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+        }
+        .chat-message {
+            margin-bottom: 1rem;
+            padding: 1rem;
+            border-radius: 0.5rem;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            margin-left: 2rem;
+        }
+        .assistant-message {
+            background-color: #f8fafc;
+            margin-right: 2rem;
+            border: 1px solid #e2e8f0;
+        }
+        .medical-analysis {
+            white-space: pre-line;
+            font-family: 'Georgia', serif;
+            line-height: 1.8;
+            color: #1a202c;
+        }
+        .section-header {
+            color: #2c5282;
+            font-weight: bold;
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .urgency-emergent {
+            color: #dc2626;
+            font-weight: bold;
+        }
+        .urgency-urgent {
+            color: #d97706;
+            font-weight: bold;
+        }
+        .urgency-routine {
+            color: #059669;
+            font-weight: bold;
+        }
+        .doctor-title {
+            color: #2c5282;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-blue-600 mb-2">MedicalGPT</h1>
+            <p class="text-gray-600">AI-Powered Medical Consultation</p>
+        </header>
+
+        <div class="max-w-3xl mx-auto bg-white rounded-lg shadow-lg p-6">
+            <div id="chat-history" class="mb-6 max-h-96 overflow-y-auto">
+                <!-- Chat messages will be displayed here -->
+            </div>
+
+            <div class="mb-6">
+                <label for="symptoms" class="block text-gray-700 text-sm font-bold mb-2">
+                    Please describe your symptoms or concerns:
+                </label>
+                <textarea
+                    id="symptoms"
+                    class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    rows="4"
+                    placeholder="Example: I've been experiencing severe headaches and fatigue for the past week, along with occasional dizziness..."
+                ></textarea>
+            </div>
+
+            <button
+                onclick="analyzeSymptoms()"
+                class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-200"
+            >
+                Get Medical Consultation
+            </button>
+
+            <div id="result" class="mt-8 hidden">
+                <h3 class="text-xl font-semibold text-gray-800 mt-8 mb-4">Similar Clinical Cases</h3>
+                <div id="similarCases" class="space-y-4"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="loading">
+        <div class="loading-spinner">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-600"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = '';
+        let isFirstMessage = true;
+
+        function formatMedicalAnalysis(text) {
+            // Format section headers
+            text = text.replace(/^([A-Z\s]+):/gm, '<div class="section-header">$1:</div>');
+            
+            // Format urgency level
+            text = text.replace(/CLINICAL URGENCY: (EMERGENT|URGENT|ROUTINE)/g, (match, level) => {
+                const className = `urgency-${level.toLowerCase()}`;
+                return `CLINICAL URGENCY: <span class="${className}">${level}</span>`;
+            });
+            
+            // Format bullet points
+            text = text.replace(/^- /gm, '• ');
+            
+            return text;
+        }
+
+        function addMessageToChat(role, content) {
+            const chatHistory = document.getElementById('chat-history');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${role === 'user' ? 'user-message' : 'assistant-message'}`;
+            
+            if (role === 'user') {
+                messageDiv.innerHTML = `<strong>Patient:</strong><br>${content}`;
+            } else {
+                messageDiv.innerHTML = `
+                    <div class="doctor-title">Dr. MedicalGPT</div>
+                    <div class="medical-analysis">${formatMedicalAnalysis(content)}</div>
+                `;
+            }
+            
+            chatHistory.appendChild(messageDiv);
+            chatHistory.scrollTop = chatHistory.scrollHeight;
+        }
+
+        async function analyzeSymptoms() {
+            const symptoms = document.getElementById('symptoms').value.trim();
+            if (!symptoms) {
+                alert('Please describe your symptoms');
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').classList.add('hidden');
+
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        symptoms,
+                        session_id: currentSessionId,
+                        is_followup: !isFirstMessage
+                    }),
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    if (isFirstMessage) {
+                        currentSessionId = data.session_id;
+                        isFirstMessage = false;
+                    }
+
+                    addMessageToChat('user', symptoms);
+                    addMessageToChat('assistant', data.advice);
+                    
+                    const similarCasesDiv = document.getElementById('similarCases');
+                    similarCasesDiv.innerHTML = data.similar_cases.map(case_ => `
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <p class="font-semibold">Case Presentation: ${case_.symptoms}</p>
+                            <p>Final Diagnosis: ${case_.conditions}</p>
+                            <p>Treatment Plan: ${case_.medications}</p>
+                        </div>
+                    `).join('');
+                    
+                    document.getElementById('result').classList.remove('hidden');
+                    document.getElementById('symptoms').value = '';
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+    </script>
+</body>
+</html> 
